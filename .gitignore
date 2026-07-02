@@ -1,0 +1,30 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Test caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local editor settings
+.vscode/
+.idea/
+
+# Runtime logs and temp artifacts
+logs/
+data_test/
+*.log
+*.tmp
+*.swp
+
+# OS metadata
+.DS_Store
+Thumbs.db
