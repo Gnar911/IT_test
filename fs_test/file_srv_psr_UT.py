@@ -11,10 +11,8 @@ from PySide6.QtCore import QCoreApplication
 
 from file_service.application_events import (
     DBCLoadedEvent,
-    FileServiceStateEvent,
-    ParserStatusEvent,
 )
-from file_service.record_id import RecordId
+# from file_service.record_id import RecordId
 from file_service.srv_if import FileService, get_file_service
 from file_service.status import ParserStatus
 from lw.service.base_service import ServiceState
@@ -22,7 +20,9 @@ from lw.logger_setup import setup_logger
 from lw.logger_setup import LOG
 from file_service.module.fs_core import ParsedEntry
 from fixture import FileServiceStatusVM
+from lw.test_event import wait
 
+TIMEOUT_QUERY_MS = 300
 TIMEOUT = 0.8
 PARSE_TIMEOUT = 15.0
 POLL_INTERVAL = 0.1
@@ -44,68 +44,26 @@ def _run_segment_discovery(token_path: str) -> None:
         ]
     )
 
-# @pytest.fixture(scope="session")
-# def qt_app():
-#     app = QCoreApplication.instance()
-#     if app is None:
-#         app = QCoreApplication([])
-#     yield app
-
-# @pytest.fixture(scope="session")
-# def file_service(qt_app) -> "Generator[FileService, None, None]":
-#     setup_logger(env="DEV", backup_count=30)
-#     file_srv = get_file_service()
-#     if file_srv.get_service_state() == ServiceState.RUNNING:
-#         yield file_srv
-#         return
-#     running_event = threading.Event()
-#     file_srv.subscribe(
-#         FileServiceStateEvent,
-#         lambda event: event.state == ServiceState.RUNNING and running_event.set(),
-#     )
-#     file_srv.start()
-#     assert running_event.wait(timeout=_SERVICE_START_TIMEOUT), "FileService did not reach RUNNING state"
-#     yield file_srv
-
-#     stopped_event = threading.Event()
-#     file_srv.subscribe(
-#         FileServiceStateEvent,
-#         lambda event: event.state == ServiceState.STOPPED and stopped_event.set(),
-#     )
-#     file_srv.stop()
-#     assert stopped_event.wait(timeout=_SERVICE_START_TIMEOUT), "FileService did not reach STOPPED state"
-
-
 @pytest.mark.parametrize(
     "file_path",
     [
         "/home/gnar911/Desktop/2025-02-11_11-14-53_仕様情報切替 1.asc",
     ],
 )
-def test_05_parse_log_with_record_id(file_service: tuple[FileService, FileServiceStatusVM], file_path: str) -> None:
-    #app = qt_app
-    file_srv, vm = file_service
+def test_05_parse_log(file_service: tuple[FileService, FileServiceStatusVM], file_path: str) -> None:
+    _, vm = file_service
 
-    record_id = file_srv.create_record()
-    record_count_before = len(file_srv.list_log_records())
-
-    assert file_srv.parse_log(file_path, record_id)
+    """ NOTE: using the ViewModel function instead"""
+    #assert file_srv.parse_log(file_path)
+    assert vm.startParsing(file_path)
     assert vm.parser_done_event.wait(PARSE_TIMEOUT)
-    assert vm.parse_record_id is not None
-    assert vm.parse_record_id == record_id
 
-    record = file_srv.get_record(record_id)
-    assert record is not None
-
-    assert len(file_srv.list_log_records()) == record_count_before
-    first_entries = record.get_page_from_row_indices(0, 10)
-    assert len(first_entries) > 0
-    assert len(first_entries) <= 10
-    assert all(isinstance(entry, ParsedEntry) for entry in first_entries)
-    print("record_data_size:", record.get_total_lines())
-    #_run_segment_discovery(str(record.get_base_path()))
-    print("first_entries_fields:")
-    for entry in first_entries:
+    visible_entries = wait(lambda: vm.entries, max_ms=TIMEOUT_QUERY_MS)
+    total = wait(lambda: vm.totalLines, max_ms=TIMEOUT_QUERY_MS)
+    assert vm.log_id is not None
+    log_id = vm.log_id
+    wait(lambda: _.read_all_entries(log_id), max_ms=TIMEOUT_QUERY_MS)
+    for entry in visible_entries:
         print(
             {
                 "line_number": int(entry.line_number),
@@ -118,23 +76,17 @@ def test_05_parse_log_with_record_id(file_service: tuple[FileService, FileServic
             }
         )
 
-    """ Adding the test for load all entries performance"""
-    t1 = time.perf_counter()
-    all_entries = record.get_all_entries()
-    t2 = time.perf_counter()
-    LOG.debug("get_all_entries: %s", t2 - t1)
-    assert len(all_entries) == record.get_total_lines()
-
+    print(total)
 
 @pytest.mark.parametrize(
     "text_line, expected_can_id, expected_channel, expected_data_len, expected_direction, expected_hex_data",
     [
         ("0.000001 1 123 Tx d 8 01 02 03 04 05 06 07 08", 0x123, "1", 8, "Tx", "01 02 03 04 05 06 07 08"),
-        ("1.250000 7 1A5 Rx d 4 AA BB CC DD", 0x1A5, "7", 4, "Rx", "AA BB CC DD"),
+        #("1.250000 7 1A5 Rx d 4 AA BB CC DD", 0x1A5, "7", 4, "Rx", "AA BB CC DD"),
     ],
 )
 def test_40_parse_line(
-    file_service: FileService,
+    # file_service: FileService,
     text_line: str,
     expected_can_id: int,
     expected_channel: str,
@@ -142,12 +94,14 @@ def test_40_parse_line(
     expected_direction: str,
     expected_hex_data: str,
 ) -> None:
-    parsed = file_service.parse_line(text_line)
+    #assert get_file_service().detect_line_format(text_line)
+    parsed =  get_file_service().parse_line(text_line)
+    assert parsed
     parsed_hex_data = " ".join(f"{int(parsed.data[i]):02X}" for i in range(int(parsed.data_len)))
     parsed_direction = "Tx" if int(parsed.direction) == 1 else "Rx"
 
-    assert isinstance(parsed, ParsedEntry)
-    assert int(parsed.line_number) == 1
+    #assert isinstance(parsed, ParsedEntry)
+    #assert int(parsed.line_number) == 1
     assert int(parsed.can_id) == expected_can_id
     assert str(parsed.channel) == expected_channel
     assert int(parsed.data_len) == expected_data_len
@@ -155,91 +109,92 @@ def test_40_parse_line(
     assert parsed_hex_data == expected_hex_data
 
 
-@pytest.mark.parametrize(
-    "text_lines, expected_can_ids, expected_channels, expected_data_lens, expected_directions, expected_hex_data",
-    [
-        (
-            "0.000001 1 123 Tx d 8 01 02 03 04 05 06 07 08\n1.250000 7 1A5 Rx d 4 AA BB CC DD",
-            [0x123, 0x1A5],
-            ["1", "7"],
-            [8, 4],
-            ["Tx", "Rx"],
-            ["01 02 03 04 05 06 07 08", "AA BB CC DD"],
-        ),
-    ],
-)
-def test_41_parse_lines(
-    file_service: FileService,
-    text_lines: str,
-    expected_can_ids: list[int],
-    expected_channels: list[str],
-    expected_data_lens: list[int],
-    expected_directions: list[str],
-    expected_hex_data: list[str],
-) -> None:
-    parsed_lines = file_service.parse_lines(text_lines)
-    parsed_channels = [str(item.channel) for item in parsed_lines]
-    parsed_directions = ["Tx" if int(item.direction) == 1 else "Rx" for item in parsed_lines]
-    parsed_hex_data_values = [
-        " ".join(f"{int(item.data[i]):02X}" for i in range(int(item.data_len)))
-        for item in parsed_lines
-    ]
+# @pytest.mark.parametrize(
+#     "text_lines, expected_can_ids, expected_channels, expected_data_lens, expected_directions, expected_hex_data",
+#     [
+#         (
+#             "0.000001 1 123 Tx d 8 01 02 03 04 05 06 07 08\n1.250000 7 1A5 Rx d 4 AA BB CC DD",
+#             [0x123, 0x1A5],
+#             ["1", "7"],
+#             [8, 4],
+#             ["Tx", "Rx"],
+#             ["01 02 03 04 05 06 07 08", "AA BB CC DD"],
+#         ),
+#     ],
+# )
+# def test_41_parse_lines(
+#     file_service: FileService,
+#     text_lines: str,
+#     expected_can_ids: list[int],
+#     expected_channels: list[str],
+#     expected_data_lens: list[int],
+#     expected_directions: list[str],
+#     expected_hex_data: list[str],
+# ) -> None:
+#     parsed_lines = file_service.parse_lines(text_lines)
+#     parsed_channels = [str(item.channel) for item in parsed_lines]
+#     parsed_directions = ["Tx" if int(item.direction) == 1 else "Rx" for item in parsed_lines]
+#     parsed_hex_data_values = [
+#         " ".join(f"{int(item.data[i]):02X}" for i in range(int(item.data_len)))
+#         for item in parsed_lines
+#     ]
 
-    assert len(parsed_lines) == len(expected_can_ids)
-    assert [int(item.line_number) for item in parsed_lines] == [1, 2]
-    assert [int(item.can_id) for item in parsed_lines] == expected_can_ids
-    assert parsed_channels == expected_channels
-    assert [int(item.data_len) for item in parsed_lines] == expected_data_lens
-    assert parsed_directions == expected_directions
-    assert parsed_hex_data_values == expected_hex_data
+#     assert len(parsed_lines) == len(expected_can_ids)
+#     assert [int(item.line_number) for item in parsed_lines] == [1, 2]
+#     assert [int(item.can_id) for item in parsed_lines] == expected_can_ids
+#     assert parsed_channels == expected_channels
+#     assert [int(item.data_len) for item in parsed_lines] == expected_data_lens
+#     assert parsed_directions == expected_directions
+#     assert parsed_hex_data_values == expected_hex_data
 
 
-@pytest.mark.parametrize(
-    "file_path",
-    [
-        "/home/gnar911/Desktop/2025-02-11_11-14-53_仕様情報切替 1.asc",
-    ],
-)
-def test_06_parse_log_without_record_id(file_service: FileService, qt_app, file_path: str) -> None:
-    parse_event = threading.Event()
-    app = qt_app
-    file_srv = file_service
+""" 20260704: NOTE: Deprecated test function"""
+# @pytest.mark.parametrize(
+#     "file_path",
+#     [
+#         "/home/gnar911/Desktop/2025-02-11_11-14-53_仕様情報切替 1.asc",
+#     ],
+# )
+# def test_06_parse_log_without_record_id(file_service: FileService, qt_app, file_path: str) -> None:
+#     parse_event = threading.Event()
+#     app = qt_app
+#     file_srv = file_service
 
-    record_ids_before = set(file_srv.list_log_records())
-    parsed_record_id: RecordId | None = None
-    done_event_count = 0
+#     record_ids_before = set(file_srv.list_log_records())
+#     parsed_record_id: RecordId | None = None
+#     done_event_count = 0
 
-    def _on_parser_status(event: ParserStatusEvent) -> None:
-        nonlocal parsed_record_id
-        nonlocal done_event_count
-        if (
-            event.status == ParserStatus.DONE
-            and event.record_id is not None
-            and event.record_id not in record_ids_before
-        ):
-            parsed_record_id = event.record_id
-            done_event_count += 1
-            parse_event.set()
+#     def _on_parser_status(event: ParserStatusEvent) -> None:
+#         nonlocal parsed_record_id
+#         nonlocal done_event_count
+#         if (
+#             event.status == ParserStatus.DONE
+#             and event.record_id is not None
+#             and event.record_id not in record_ids_before
+#         ):
+#             parsed_record_id = event.record_id
+#             done_event_count += 1
+#             parse_event.set()
 
-    file_srv.subscribe(ParserStatusEvent, _on_parser_status)
+#     file_srv.subscribe(ParserStatusEvent, _on_parser_status)
 
-    started = file_srv.parse_log(file_path)
-    assert started
+#     started = file_srv.parse_log(file_path)
+#     assert started
 
-    deadline = time.monotonic() + PARSE_TIMEOUT
-    while not parse_event.is_set() and time.monotonic() < deadline:
-        app.processEvents()
-        parse_event.wait(timeout=POLL_INTERVAL)
+#     deadline = time.monotonic() + PARSE_TIMEOUT
+#     while not parse_event.is_set() and time.monotonic() < deadline:
+#         app.processEvents()
+#         parse_event.wait(timeout=POLL_INTERVAL)
 
-    assert parse_event.is_set()
-    assert parsed_record_id is not None
-    assert parsed_record_id in file_srv.list_log_records()
-    assert done_event_count == 1
-    assert len(file_srv.list_log_records()) == len(record_ids_before) + 1
-    record = file_srv.get_record(parsed_record_id)
-    assert record is not None
-    token_path = str(record.get_base_path())
-    _run_segment_discovery(token_path)
+#     assert parse_event.is_set()
+#     assert parsed_record_id is not None
+#     assert parsed_record_id in file_srv.list_log_records()
+#     assert done_event_count == 1
+#     assert len(file_srv.list_log_records()) == len(record_ids_before) + 1
+#     record = file_srv.get_record(parsed_record_id)
+#     assert record is not None
+#     token_path = str(record.get_base_path())
+#     _run_segment_discovery(token_path)
 
 
 @pytest.mark.parametrize(

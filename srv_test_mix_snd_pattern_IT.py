@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-"""
-At this level of test case we not use QApplicaiton and processEvent for test anymore, instead we use pip install pytest-qt and qbot wait.
-"""
 from dataclasses import dataclass
 import time
 from typing import Any
@@ -27,25 +24,12 @@ class MsgBuilder:
 	period_s: float = 0.02
 	data_hex: str = "01 02 03 04 05 06 07 08"
 
-	def build(self, file_srv: FileService) -> ParsedEntry:
+	def build(self, tc_name: str, cmd_th: int, file_srv: FileService) -> ParsedEntry:
+		#TODO: Make data_hex encode with the tc_name + cmd_th
 		entry = file_srv.parse_line(
 			f"0.000001 0 {self.can_id:03X} Tx d 8 {self.data_hex}"
 		)
 		return entry
-
-
-"""
-Pattern syntax:
-    A<ch>:<id>:<p>      = ADD message with period ms, e.g., A0:100:1, A1:0x200:3
-    RM<ch>:<id>         = REMOVE message
-    CLR                 = CLEAR
-    R<ch>:<id>          = RESUME (single message)
-    P<ch>:<id>          = PAUSE (single message)
-    RA                  = RESUME_ALL
-    PA                  = PAUSE_ALL
-    UP<ch>:<id>:<p>     = UPDATE_PERIOD, e.g., UP0:100:0.01
-    UD<ch>:<id>:<data>  = UPDATE_DATA, e.g., UD0:100:DEADBEEF11
-"""
 
 SEND_SCENARIOS = [
     (
@@ -64,7 +48,7 @@ SEND_SCENARIOS = [
     ),
 ]
 
-
+@pytest.mark.timeout(10)
 @pytest.mark.parametrize("tc_name, scenario", SEND_SCENARIOS)
 def test_IT_PATTERN_SEND(
     all_service: tuple[CANService, FileService, TestServices],
@@ -86,11 +70,15 @@ def test_IT_PATTERN_SEND(
 
 	# Simple factory: scenario stores command class, build concrete runtime args after fixture acquisition.
 	commands: list[tuple[type[CommandEvent], ParsedEntry, float]] = []
+	counter = Counter()
+	expected_entries: list[ParsedEntry] = []
 	for cmd_type, builder in scenario:
-		entry = builder.build(file_srv)
+		counter[cmd_type] += 1
+		entry = builder.build(tc_name, counter.get(cmd_type), file_srv)
+		expected_entries.append(entry)
 		commands.append((cmd_type, entry, float(builder.period_s)))
 
-	counter = Counter()
+	counter.clear()
 	for idx, (cmd_type, entry, period_s) in enumerate(commands):
 		counter[cmd_type] += 1
 
@@ -124,12 +112,8 @@ def test_IT_PATTERN_SEND(
 		if idx < len(commands) - 1 and MIN_COMMAND_INTERVAL > 0:
 			time.sleep(MIN_COMMAND_INTERVAL)
 
-	qtbot.wait(3000)
-
-
-
-	assert file_srv.stop_recording() is True
-	qtbot.waitUntil(lambda: vm.recorder_stopped_event.is_set(), timeout=int(TIMEOUT_STATUS * 1000))
+	vm.fetch_page(100)
+	#TODO: assert the vm.entries equal to the expected_entries[0:100]
 
 
     

@@ -2,7 +2,7 @@ import pytest
 from can_service.srv_if import CANService, get_can_service_facade
 from file_service.srv_if import get_file_service, FileService
 from cs_test.fixture import CanServiceVM
-from fs_test.fixture import FileServiceStatusVM, ParserStatusEvent, RecorderStatusEvent, DecodeStatusEvent
+from fs_test.fixture import FileServiceStatusVM
 
 """ Pytest automatically discovers and loads every conftest.py in your test directory hierarchy. """
 pytest_plugins = [

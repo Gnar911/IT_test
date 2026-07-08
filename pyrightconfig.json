@@ -1,0 +1,7 @@
+{
+    "extraPaths": [
+        "../canapp/src",
+        "../can_service/src",
+        "../network_service/src"
+    ]
+}

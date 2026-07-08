@@ -16,7 +16,7 @@ from file_service.application_events import (
     ParserStatusEvent,
     RecorderStatusEvent,
 )
-from file_service.record_id import RecordId
+#from file_service.record_id import RecordId
 from file_service.srv_if import FileService, get_file_service
 from lw.service.base_service import ServiceState
 from lw.define import CAN_SHARED_RING_SHM_NAME

@@ -28,3 +28,8 @@ data_test/
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Ignore egg-info produced by installs/builds
+IT_test.egg-info/
+
+build/
