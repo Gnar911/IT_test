@@ -6,7 +6,7 @@ import pytest
 import webbrowser
 from pathlib import Path
 from can_service.srv_if import CANService, get_can_service_facade
-from file_service.srv_if import get_file_service, FileService
+from file_service.file_service import get_file_service, FileService
 from cs_test.fixture import CanServiceVM
 from fs_test.fixture import FileServiceStatusVM
 from conftest import TestServices

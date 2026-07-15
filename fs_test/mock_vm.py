@@ -9,7 +9,7 @@ from typing import Generator, Callable
 from file_service.application_events import FileServiceStateEvent, \
 DecodeStartedEvent, DecodeCompletedEvent, DecodeFileNotFoundEvent, DecodeProgressEvent, DecodeSignalListEvent, \
 ParserStatusEvent, DecodeStatusEvent, RecorderStatusEvent
-from file_service.srv_if import FileService, get_file_service
+from file_service.file_service import FileService, get_file_service
 from lw.logger_setup import setup_logger, LOG
 from file_service.status import ParserStatus, RecorderStatus, DecodeStatus
 # from file_service.status import DecodeStatus
