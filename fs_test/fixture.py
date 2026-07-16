@@ -21,20 +21,25 @@ from file_service.module.fs_core import LogRecord, ParsedEntry
 from file_service.recorder.rcd_ring_reader import LogRecordRing
 from canapp.vm.record_viewmodel import RecordViewModel
 from canapp.vm.log_viewmodel import LogViewModel
-from fs_test.mock_vm import DecodeStatusVM, RecordModel, ServiceStateVM
+from fs_test.mock_vm import DecodeStatusVM, RecordModel, ServiceStateVM, DBCModel
+from file_service.application_events import FileServiceStateEvent, \
+DBCLoadedEvent, \
+DecodeStartedEvent, DecodeCompletedEvent, DecodeFileNotFoundEvent, DecodeProgressEvent, DecodeSignalListEvent
 
-class FileServiceStatusVM(ServiceStateVM, LogViewModel, RecordModel, DecodeStatusVM):
+class FileServiceStatusVM(ServiceStateVM, LogViewModel, RecordModel, DecodeStatusVM, DBCModel):
 	def __init__(self):
 		ServiceStateVM.__init__(self)
 		LogViewModel.__init__(self)
 		RecordModel.__init__(self)
 		DecodeStatusVM.__init__(self)
+		DBCModel.__init__(self)
 
 	def reset(self):
 		ServiceStateVM.reset(self)
 		LogViewModel.reset(self)
 		RecordModel.reset(self)
 		DecodeStatusVM.reset(self)
+		DBCModel.reset(self)
 
 	@pytest.fixture
 	def app_vm() -> FileServiceStatusVM:
@@ -57,6 +62,7 @@ def file_service(app_vm: FileServiceStatusVM) -> Generator[tuple[FileService, Fi
 		(RecorderStatus, vm.on_recorder_status),
 		(ParserStatus, vm.on_parser_status),
 		(DecodeStatus, vm.on_decode_status),
+		(DBCLoadedEvent, vm.on_dbc_model_loaded),
 	]
 
 	# print(f"vm={vm!r}")

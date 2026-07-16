@@ -7,6 +7,7 @@ import pytest
 import threading
 from typing import Generator, Callable
 from file_service.application_events import FileServiceStateEvent, \
+DBCLoadedEvent, \
 DecodeStartedEvent, DecodeCompletedEvent, DecodeFileNotFoundEvent, DecodeProgressEvent, DecodeSignalListEvent, \
 ParserStatusEvent, DecodeStatusEvent, RecorderStatusEvent
 from file_service.file_service import FileService, get_file_service
@@ -98,6 +99,17 @@ class RecordModel:
 		# self.entries = self.record.get_page_from_row_indices(0, count)
 		#return self.entries
 		pass
+
+@dataclass
+class DBCModel:
+	"""Simple test DBC model for unit tests: records last loaded info and signals when loaded."""
+	dbc_loaded_event: QtEvent = field(default_factory=QtEvent)
+
+	def on_dbc_model_loaded(self, event: DBCLoadedEvent) -> None:
+		self.dbc_loaded_event.set()
+
+	def reset(self) -> None:
+		self.dbc_loaded_event.clear()
 
 @dataclass
 class ServiceStateVM:
